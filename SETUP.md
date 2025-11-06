@@ -63,12 +63,37 @@ INSERT INTO community_booking_confirmation_sport_templates (
 );
 ```
 
-## Step 3: Set Up Email Service (Resend)
+## Step 3: Set Up Email Service
 
 Calendar invites are sent via email with ICS attachments. This works with any calendar app (Google, Outlook, Apple, etc.) and doesn't require special API permissions.
 
-### Why Resend?
+You have **two options**: AWS SES or Resend
 
+### Option A: AWS SES (Recommended if you already have AWS SMTP)
+
+Since you mentioned having AWS SMTP configured on Supabase, use this option!
+
+**Benefits:**
+- Very low cost ($0.10 per 1,000 emails)
+- Free tier: 62,000 emails/month (if sending from EC2)
+- Full control over email infrastructure
+- You already have it configured!
+
+**Setup**: See [AWS-SES-SETUP.md](./AWS-SES-SETUP.md) for complete instructions.
+
+**Quick setup:**
+```bash
+supabase secrets set AWS_REGION="us-east-1"
+supabase secrets set AWS_ACCESS_KEY_ID="AKIA..."
+supabase secrets set AWS_SECRET_ACCESS_KEY="..."
+supabase secrets set USE_AWS_SES="true"
+```
+
+### Option B: Resend (Simpler Alternative)
+
+If you don't want to use AWS SES or need quicker setup.
+
+**Benefits:**
 - Simple API
 - Great deliverability
 - Free tier: 3,000 emails/month
@@ -126,7 +151,27 @@ Your Wati templates should have these parameters:
 
 ## Step 5: Set Environment Variables
 
-Set secrets in Supabase:
+Set secrets in Supabase based on your email provider choice:
+
+### For AWS SES:
+
+```bash
+# Wati credentials
+supabase secrets set WATI_API_TOKEN="your-wati-token"
+supabase secrets set WATI_BASE_URL="https://live-mt-server.wati.io/429482"
+
+# AWS SES
+supabase secrets set AWS_REGION="us-east-1"
+supabase secrets set AWS_ACCESS_KEY_ID="AKIA..."
+supabase secrets set AWS_SECRET_ACCESS_KEY="..."
+supabase secrets set USE_AWS_SES="true"
+
+# Email sender details
+supabase secrets set EMAIL_FROM_ADDRESS="bookings@gametheory.in"
+supabase secrets set EMAIL_FROM_NAME="Game Theory Bookings"
+```
+
+### For Resend:
 
 ```bash
 # Wati credentials
@@ -135,6 +180,8 @@ supabase secrets set WATI_BASE_URL="https://live-mt-server.wati.io/429482"
 
 # Resend email service
 supabase secrets set RESEND_API_KEY="re_your_api_key"
+
+# Email sender details
 supabase secrets set EMAIL_FROM_ADDRESS="bookings@gametheory.in"
 supabase secrets set EMAIL_FROM_NAME="Game Theory Bookings"
 ```

@@ -18,6 +18,10 @@ import {
   validateEmailConfig,
 } from "../_shared/smtp.ts";
 import {
+  sendEmailWithICSViaAWSSES,
+  validateAWSSESConfig,
+} from "../_shared/aws-ses.ts";
+import {
   createSupabaseClient,
   getSportTemplate,
   getFacility,
@@ -47,10 +51,30 @@ serve(async (req) => {
     const watiApiToken = Deno.env.get("WATI_API_TOKEN");
     const watiBaseUrl = Deno.env.get("WATI_BASE_URL");
 
-    // Email service configuration (using Resend for ICS calendar invites)
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    // Email service configuration
     const emailFromAddress = Deno.env.get("EMAIL_FROM_ADDRESS") || "bookings@gametheory.in";
     const emailFromName = Deno.env.get("EMAIL_FROM_NAME") || "Game Theory Bookings";
+
+    // Check which email provider is configured (AWS SES or Resend)
+    const useAWSSES = Deno.env.get("USE_AWS_SES") === "true" || Deno.env.get("AWS_REGION");
+
+    let emailValidation;
+    let emailProvider;
+
+    if (useAWSSES) {
+      // AWS SES configuration
+      const awsRegion = Deno.env.get("AWS_REGION");
+      const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
+      const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+
+      emailValidation = validateAWSSESConfig(awsRegion, awsAccessKeyId, awsSecretAccessKey);
+      emailProvider = "aws-ses";
+    } else {
+      // Resend configuration
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
+      emailValidation = validateEmailConfig("resend", resendApiKey);
+      emailProvider = "resend";
+    }
 
     // Validate configurations
     const watiValidation = validateWatiConfig(watiApiToken, watiBaseUrl);
@@ -58,10 +82,11 @@ serve(async (req) => {
       throw new Error(watiValidation.error);
     }
 
-    const emailValidation = validateEmailConfig("resend", resendApiKey);
     if (!emailValidation.valid) {
       throw new Error(emailValidation.error);
     }
+
+    console.log(`Using email provider: ${emailProvider}`);
 
     // Parse request body
     const payload: BookingPayload = await req.json();
@@ -198,20 +223,42 @@ serve(async (req) => {
       const emailSubject = `Calendar Invite: ${sportName} on ${formattedDateTime}`;
       const emailBody = `Hi ${userName},\n\nYour ${sportName} booking is confirmed!\n\n${calendarDescription}\n\nPlease find the calendar invite attached. Click on it to add to your calendar.\n\nSee you there!\nTeam Game Theory`;
 
-      // Send email with ICS attachment
-      const emailResponse = await sendEmailWithICSViaResend(
-        {
-          to: userEmail,
-          toName: userName,
-          subject: emailSubject,
-          textBody: emailBody,
-          icsContent: icsContent,
-          icsFilename: `booking-${sportName.toLowerCase()}.ics`,
-        },
-        resendApiKey!,
-        emailFromAddress,
-        emailFromName
-      );
+      // Send email with ICS attachment (using configured provider)
+      let emailResponse;
+
+      if (emailProvider === "aws-ses") {
+        emailResponse = await sendEmailWithICSViaAWSSES(
+          {
+            to: userEmail,
+            toName: userName,
+            subject: emailSubject,
+            textBody: emailBody,
+            icsContent: icsContent,
+            icsFilename: `booking-${sportName.toLowerCase()}.ics`,
+          },
+          {
+            region: Deno.env.get("AWS_REGION")!,
+            accessKeyId: Deno.env.get("AWS_ACCESS_KEY_ID")!,
+            secretAccessKey: Deno.env.get("AWS_SECRET_ACCESS_KEY")!,
+            fromEmail: emailFromAddress,
+            fromName: emailFromName,
+          }
+        );
+      } else {
+        emailResponse = await sendEmailWithICSViaResend(
+          {
+            to: userEmail,
+            toName: userName,
+            subject: emailSubject,
+            textBody: emailBody,
+            icsContent: icsContent,
+            icsFilename: `booking-${sportName.toLowerCase()}.ics`,
+          },
+          Deno.env.get("RESEND_API_KEY")!,
+          emailFromAddress,
+          emailFromName
+        );
+      }
 
       if (!emailResponse.success) {
         throw new Error(emailResponse.error);

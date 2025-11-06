@@ -30,7 +30,7 @@ Input JSON → Supabase Edge Function → Process & Format
 - Supabase CLI installed
 - Supabase project created
 - Wati API credentials
-- Resend account (or other email service) for calendar invites
+- Email service: AWS SES (recommended if you have AWS) or Resend
 
 ### Installation
 
