@@ -30,7 +30,7 @@ Input JSON → Supabase Edge Function → Process & Format
 - Supabase CLI installed
 - Supabase project created
 - Wati API credentials
-- Email service: AWS SES (recommended if you have AWS) or Resend
+- AWS SES credentials (IAM access key with SES permissions)
 
 ### Installation
 
@@ -43,7 +43,9 @@ Input JSON → Supabase Edge Function → Process & Format
    ```bash
    supabase secrets set WATI_API_TOKEN="your-token"
    supabase secrets set WATI_BASE_URL="https://live-mt-server.wati.io/429482"
-   supabase secrets set RESEND_API_KEY="re_your_api_key"
+   supabase secrets set AWS_REGION="us-east-1"
+   supabase secrets set AWS_ACCESS_KEY_ID="AKIA..."
+   supabase secrets set AWS_SECRET_ACCESS_KEY="..."
    supabase secrets set EMAIL_FROM_ADDRESS="bookings@gametheory.in"
    supabase secrets set EMAIL_FROM_NAME="Game Theory Bookings"
    ```
