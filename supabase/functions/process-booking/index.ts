@@ -10,18 +10,36 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 // TYPE DEFINITIONS
 // ============================================================================
 
+// Support both formats: Zapier webhook (camelCase) and direct API (Title Case)
 interface BookingPayload {
-  "User Name": string;
-  "User Phone Number": string;
-  "User Email": string;
-  "Slots": Array<{
+  // Zapier format (wrapped in input_data)
+  input_data?: string;
+
+  // Direct format (Title Case with spaces)
+  "User Name"?: string;
+  "User Phone Number"?: string;
+  "User Email"?: string;
+  "Slots"?: Array<{
     facilityName: string;
     courtName: string;
     startTime: string;
     eventDate: string;
   }>;
-  "Sport Name": string;
-  "Event Type": string;
+  "Sport Name"?: string;
+  "Event Type"?: string;
+
+  // Zapier format (camelCase)
+  userName?: string;
+  userPhoneNumber?: string;
+  userEmail?: string;
+  slots?: Array<{
+    facilityName: string;
+    courtName: string;
+    startTime: string;
+    eventDate: string;
+  }>;
+  sportName?: string;
+  eventType?: string;
 }
 
 // ============================================================================
@@ -405,15 +423,35 @@ serve(async (req) => {
     // 2. PARSE INPUT
     // ========================================================================
 
-    const payload: BookingPayload = await req.json();
-    console.log("📥 Received booking:", JSON.stringify(payload, null, 2));
+    let rawPayload: BookingPayload = await req.json();
+    console.log("📥 Received booking:", JSON.stringify(rawPayload, null, 2));
 
-    const userName = payload["User Name"];
-    const userPhone = payload["User Phone Number"];
-    const userEmail = payload["User Email"];
-    const sportName = payload["Sport Name"];
-    const eventType = payload["Event Type"];
-    const slot = payload.Slots[0];
+    // Handle Zapier format (input_data wrapper)
+    let payload: BookingPayload;
+    if (rawPayload.input_data) {
+      try {
+        payload = JSON.parse(rawPayload.input_data);
+        console.log("📦 Parsed input_data:", JSON.stringify(payload, null, 2));
+      } catch (e) {
+        throw new Error("Failed to parse input_data field");
+      }
+    } else {
+      payload = rawPayload;
+    }
+
+    // Normalize field names (support both formats)
+    const userName = payload["User Name"] || payload.userName;
+    const userPhone = payload["User Phone Number"] || payload.userPhoneNumber;
+    const userEmail = payload["User Email"] || payload.userEmail;
+    const sportName = payload["Sport Name"] || payload.sportName;
+    const eventType = payload["Event Type"] || payload.eventType;
+    const slots = payload.Slots || payload.slots;
+
+    if (!userName || !userPhone || !userEmail || !sportName || !eventType || !slots || slots.length === 0) {
+      throw new Error("Missing required fields in payload");
+    }
+
+    const slot = slots[0];
     const facilityName = slot.facilityName;
     const courtName = slot.courtName;
     const eventDate = slot.eventDate;
