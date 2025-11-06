@@ -473,15 +473,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get sport template
+    // Get sport template (filter by use_case for community bookings)
     const { data: sportTemplate, error: sportError } = await supabase
       .from("community_booking_confirmation_sport_templates")
       .select("*")
       .eq("sport_name", sportName)
+      .eq("use_case", "community_booking")
       .single();
 
     if (sportError || !sportTemplate) {
-      throw new Error(`Sport template not found for: ${sportName}. Please add it to the database first.`);
+      throw new Error(`Sport template not found for: ${sportName} (use_case: community_booking). Please add it to the database first.`);
     }
 
     // Get facility info
@@ -553,20 +554,31 @@ serve(async (req) => {
     // Build calendar description
     let calendarDescription = sportTemplate.calendar_description_template || "";
     calendarDescription = calendarDescription
+      .replace(/\{\{userName\}\}/g, userName)
       .replace(/\{\{facilityName\}\}/g, facilityName)
       .replace(/\{\{datetime\}\}/g, formattedDateTime);
 
-    if (sportTemplate.please_bring?.length > 0) {
-      calendarDescription += "\n\nWhat to bring:";
-      sportTemplate.please_bring.forEach((item: string) => {
-        calendarDescription += `\n- ${item}`;
+    // attribute_2: we_will_provide
+    if (sportTemplate.attribute_2?.length > 0) {
+      calendarDescription += "\n\nWe'll provide:";
+      sportTemplate.attribute_2.forEach((item: string) => {
+        calendarDescription += `\n🎯 ${item}`;
       });
     }
 
-    if (sportTemplate.we_will_provide?.length > 0) {
-      calendarDescription += "\n\nWe provide:";
-      sportTemplate.we_will_provide.forEach((item: string) => {
-        calendarDescription += `\n- ${item}`;
+    // attribute_1: please_bring
+    if (sportTemplate.attribute_1?.length > 0) {
+      calendarDescription += "\n\nPlease bring:";
+      sportTemplate.attribute_1.forEach((item: string) => {
+        calendarDescription += `\n👉 ${item}`;
+      });
+    }
+
+    // attribute_3: tips
+    if (sportTemplate.attribute_3?.length > 0) {
+      calendarDescription += "\n\nTips:";
+      sportTemplate.attribute_3.forEach((item: string) => {
+        calendarDescription += `\n💡 ${item}`;
       });
     }
 

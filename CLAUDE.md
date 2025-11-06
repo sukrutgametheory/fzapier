@@ -30,6 +30,24 @@ Custom workflow automation system built with Supabase Edge Functions to replace 
 - ✅ Created `test-payload-zapier.json` for testing Zapier format
 - ✅ Committed and pushed changes to GitHub
 
+### 2025-11-06: Database Schema Restructuring
+**Goal**: Make sport templates table more flexible and future-proof
+- ✅ Restructured `community_booking_confirmation_sport_templates` table:
+  - Renamed `please_bring` → `attribute_1`
+  - Renamed `we_will_provide` → `attribute_2`
+  - Renamed `tips` → `attribute_3`
+  - Added `use_case` column to filter by booking type (e.g., 'community_booking')
+  - Added `attribute_4`, `attribute_5`, `attribute_6` for future use
+  - Created indexes for performance optimization
+- ✅ Updated Edge Function to:
+  - Filter templates by `use_case = 'community_booking'`
+  - Use new attribute column names
+  - Support `{{userName}}` placeholder in calendar descriptions
+- ✅ Created migration file: `supabase/migrations/20251106_update_sport_templates_schema.sql`
+- ✅ Created seed file: `supabase/seed_badminton_template.sql` with sample Badminton template
+- ✅ Created documentation: `SCHEMA_UPDATE.md` with detailed migration guide
+- ✅ Updated calendar description format with emojis (🎯, 👉, 💡)
+
 ---
 
 ## Current Architecture
@@ -94,8 +112,17 @@ Both formats are now supported with automatic normalization.
 
 ### Tables
 1. **community_booking_confirmation_sport_templates**
-   - Stores sport-specific configurations
-   - Fields: sport_name, wati_template_name, please_bring, we_will_provide, calendar_description_template
+   - Stores sport-specific configurations for different use cases
+   - **Key Fields**:
+     - `sport_name` - Sport identifier (e.g., "Badminton")
+     - `use_case` - Booking type filter (e.g., "community_booking")
+     - `wati_template_name` - WhatsApp template identifier
+     - `calendar_description_template` - Email calendar description template
+     - `attribute_1` - Generic attribute (community_booking: please_bring items)
+     - `attribute_2` - Generic attribute (community_booking: we_will_provide items)
+     - `attribute_3` - Generic attribute (community_booking: tips)
+     - `attribute_4`, `attribute_5`, `attribute_6` - Reserved for future use
+   - **Indexes**: `(sport_name, use_case)` for fast lookups
 
 2. **community_booking_confirmation_workflow_executions**
    - Logs all workflow executions
@@ -203,21 +230,25 @@ ORDER BY created_at DESC;
 
 ## Next Steps
 
-1. **Immediate**:
+1. **Immediate** (Schema Migration):
+   - [ ] Run migration: `supabase/migrations/20251106_update_sport_templates_schema.sql`
+   - [ ] Insert Badminton template: `supabase/seed_badminton_template.sql`
    - [ ] Deploy updated Edge Function to Supabase
-   - [ ] Test Zapier integration end-to-end
-   - [ ] Verify WhatsApp message delivery
-   - [ ] Verify email calendar invite delivery
+   - [ ] Test with Zapier webhook using new schema
+   - [ ] Verify WhatsApp uses template: `community_badminton_confirmation_v2`
+   - [ ] Verify email calendar invite has correct format with emojis
 
 2. **Short-term**:
    - [ ] Monitor execution logs for issues
-   - [ ] Add more sports templates as needed
+   - [ ] Add more sports templates (Pickleball, Tennis, etc.)
    - [ ] Fine-tune error handling
+   - [ ] Test edge cases (missing attributes, different use_cases)
 
 3. **Long-term**:
    - [ ] Implement webhook authentication
    - [ ] Add admin dashboard
    - [ ] Consider scaling optimizations
+   - [ ] Add support for other use_cases (private_booking, tournament)
 
 ---
 
