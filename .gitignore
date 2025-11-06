@@ -1,0 +1,23 @@
+# Supabase
+.branches
+.temp
+.env
+.env.local
+
+# Deno
+.deno/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets
+service-account.json
+credentials.json
