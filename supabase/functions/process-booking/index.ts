@@ -10,11 +10,13 @@ import {
   validateWatiConfig,
 } from "../_shared/wati.ts";
 import {
-  createCalendarEvent,
-  buildCalendarEvent,
+  generateICS,
   buildCalendarDescription,
-  validateCalendarConfig,
-} from "../_shared/calendar.ts";
+} from "../_shared/ics-calendar.ts";
+import {
+  sendEmailWithICSViaResend,
+  validateEmailConfig,
+} from "../_shared/smtp.ts";
 import {
   createSupabaseClient,
   getSportTemplate,
@@ -44,7 +46,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const watiApiToken = Deno.env.get("WATI_API_TOKEN");
     const watiBaseUrl = Deno.env.get("WATI_BASE_URL");
-    const googleServiceAccount = Deno.env.get("GOOGLE_SERVICE_ACCOUNT");
+
+    // Email service configuration (using Resend for ICS calendar invites)
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    const emailFromAddress = Deno.env.get("EMAIL_FROM_ADDRESS") || "bookings@gametheory.in";
+    const emailFromName = Deno.env.get("EMAIL_FROM_NAME") || "Game Theory Bookings";
 
     // Validate configurations
     const watiValidation = validateWatiConfig(watiApiToken, watiBaseUrl);
@@ -52,9 +58,9 @@ serve(async (req) => {
       throw new Error(watiValidation.error);
     }
 
-    const calendarValidation = validateCalendarConfig(googleServiceAccount);
-    if (!calendarValidation.valid) {
-      throw new Error(calendarValidation.error);
+    const emailValidation = validateEmailConfig("resend", resendApiKey);
+    if (!emailValidation.valid) {
+      throw new Error(emailValidation.error);
     }
 
     // Parse request body
@@ -163,9 +169,9 @@ serve(async (req) => {
       );
     }
 
-    // Send Google Calendar invite
+    // Send Calendar invite via email with ICS attachment
     try {
-      console.log("Creating calendar event...");
+      console.log("Sending calendar invite via email...");
 
       const calendarDescription = buildCalendarDescription(
         sportTemplate.calendar_description_template || "",
@@ -175,31 +181,51 @@ serve(async (req) => {
         sportTemplate.we_will_provide
       );
 
-      const calendarEvent = buildCalendarEvent(
-        userName,
-        userEmail,
-        sportName,
-        facilityName,
-        startDateTime,
-        endDateTime,
-        calendarDescription,
-        facilityAddress
+      // Generate ICS file
+      const icsContent = generateICS({
+        summary: `${sportName} - Community Game`,
+        description: calendarDescription,
+        location: facilityAddress,
+        startDateTime: startDateTime,
+        endDateTime: endDateTime,
+        organizerEmail: emailFromAddress,
+        organizerName: emailFromName,
+        attendeeEmail: userEmail,
+        attendeeName: userName,
+      });
+
+      // Build email body
+      const emailSubject = `Calendar Invite: ${sportName} on ${formattedDateTime}`;
+      const emailBody = `Hi ${userName},\n\nYour ${sportName} booking is confirmed!\n\n${calendarDescription}\n\nPlease find the calendar invite attached. Click on it to add to your calendar.\n\nSee you there!\nTeam Game Theory`;
+
+      // Send email with ICS attachment
+      const emailResponse = await sendEmailWithICSViaResend(
+        {
+          to: userEmail,
+          toName: userName,
+          subject: emailSubject,
+          textBody: emailBody,
+          icsContent: icsContent,
+          icsFilename: `booking-${sportName.toLowerCase()}.ics`,
+        },
+        resendApiKey!,
+        emailFromAddress,
+        emailFromName
       );
 
-      const calendarResponse = await createCalendarEvent(
-        calendarEvent,
-        googleServiceAccount!
-      );
+      if (!emailResponse.success) {
+        throw new Error(emailResponse.error);
+      }
 
       calendarSent = true;
       await updateWorkflowCalendarResult(
         supabase,
         executionId,
         true,
-        calendarResponse as unknown as Record<string, unknown>
+        { messageId: emailResponse.messageId } as Record<string, unknown>
       );
 
-      console.log("Calendar event created successfully");
+      console.log("Calendar invite email sent successfully");
     } catch (error) {
       const errorMsg = `Calendar error: ${error instanceof Error ? error.message : String(error)}`;
       console.error(errorMsg);

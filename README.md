@@ -6,9 +6,10 @@ A custom workflow automation system built with Supabase Edge Functions to handle
 
 - **Webhook Endpoint**: Receives booking data and triggers automated workflows
 - **WhatsApp Notifications**: Sends sport-specific confirmation messages via Wati
-- **Calendar Invites**: Creates and sends Google Calendar invites
+- **Calendar Invites**: Sends ICS calendar files via email (works with all calendar apps)
 - **Full Logging**: Tracks all workflow executions in database
 - **Sport-Specific Templates**: Configurable templates per sport stored in database
+- **Universal Compatibility**: Calendar invites work with Google, Outlook, Apple Calendar, etc.
 
 ## Architecture
 
@@ -17,8 +18,8 @@ Input JSON → Supabase Edge Function → Process & Format
                                     ↓
                           ┌─────────┴─────────┐
                           ↓                   ↓
-                    Wati WhatsApp      Google Calendar
-                    Template Msg          Invite
+                    Wati WhatsApp      Email with ICS
+                    Template Msg       Calendar Invite
                           ↓                   ↓
                     Log to Database
 ```
@@ -29,7 +30,7 @@ Input JSON → Supabase Edge Function → Process & Format
 - Supabase CLI installed
 - Supabase project created
 - Wati API credentials
-- Google Cloud Service Account for Calendar API
+- Resend account (or other email service) for calendar invites
 
 ### Installation
 
@@ -42,7 +43,9 @@ Input JSON → Supabase Edge Function → Process & Format
    ```bash
    supabase secrets set WATI_API_TOKEN="your-token"
    supabase secrets set WATI_BASE_URL="https://live-mt-server.wati.io/429482"
-   supabase secrets set GOOGLE_SERVICE_ACCOUNT="your-service-account-json"
+   supabase secrets set RESEND_API_KEY="re_your_api_key"
+   supabase secrets set EMAIL_FROM_ADDRESS="bookings@gametheory.in"
+   supabase secrets set EMAIL_FROM_NAME="Game Theory Bookings"
    ```
 4. Run database migrations:
    ```bash
