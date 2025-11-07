@@ -11,5 +11,6 @@
     }
   ],
   "Sport Name": "Badminton",
-  "Event Type": "COMMUNITY_GAME"
+  "Event Type": "COMMUNITY_GAME",
+  "Event Name": "community_game"
 }

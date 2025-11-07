@@ -116,19 +116,42 @@ function escapeICS(text) {
 // ============================================================================
 // WATI (WhatsApp) FUNCTIONS
 // ============================================================================
-async function sendWhatsAppMessage(phoneNumber, templateName, parameters, watiApiToken, watiBaseUrl) {
+async function sendWhatsAppMessage(phoneNumber, templateName, userName, formattedDateTime, facilityName, sportName, facilityMapLink, watiApiToken, watiBaseUrl) {
   try {
     // Clean up inputs (trim whitespace)
     const cleanToken = watiApiToken.trim();
     const cleanBaseUrl = watiBaseUrl.trim().replace(/\/$/, ""); // Remove trailing slash
     const formattedPhone = phoneNumber.startsWith("91") ? phoneNumber : `91${phoneNumber}`;
     const url = `${cleanBaseUrl}/api/v2/sendTemplateMessage?whatsappNumber=${formattedPhone}`;
-
+    // Build parameters array, ensuring no empty values (Wati may reject empty parameters)
+    const parameters = [
+      {
+        name: "name",
+        value: userName
+      },
+      {
+        name: "datetime",
+        value: formattedDateTime
+      },
+      {
+        name: "facility_name",
+        value: facilityName
+      },
+      {
+        name: "sport_name",
+        value: sportName
+      },
+      {
+        name: "facility_map_link",
+        value: facilityMapLink
+      }
+    ];
     const payload = {
       template_name: templateName,
       broadcast_name: templateName,
       parameters: parameters
     };
+    console.log(`📋 WhatsApp Parameters:`, JSON.stringify(parameters, null, 2));
     console.log(`📤 Sending to Wati: ${url}`);
     console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
     console.log(`🔑 Token format: ${cleanToken.substring(0, 10)}...${cleanToken.substring(cleanToken.length - 4)} (length: ${cleanToken.length})`);
@@ -313,7 +336,6 @@ serve(async (req)=>{
     // const userEmail = "nithya.n@gametheory.in";
     const sportName = payload["Sport Name"] || payload.sportName;
     const eventType = payload["Event Type"] || payload.eventType;
-    const eventName = payload["Event Name"] || payload.eventName || 'community_game'; // Default to community_game
     const slots = payload.Slots || payload.slots;
     if (!userName || !userPhone || !userEmail || !sportName || !eventType || !slots || slots.length === 0) {
       throw new Error("Missing required fields in payload");
@@ -335,15 +357,10 @@ serve(async (req)=>{
     // ========================================================================
     const supabase = createClient(supabaseUrl, supabaseKey);
     // Get sport template (filter by use_case for community bookings)
-    // Get Wati template (filter by sport_name, event_name, and event_type)
-    console.log(`🔍 Looking for template: sport=${sportName}, event_name=${eventName}, event_type=${eventType}`);
-    const { data: sportTemplate, error: sportError } = await supabase.from("wati_templates").select("*").eq("sport_name", sportName).eq("event_name", eventName).eq("event_type", eventType).single();
+    const { data: sportTemplate, error: sportError } = await supabase.from("community_booking_confirmation_sport_templates").select("*").eq("sport_name", sportName).eq("use_case", "community_booking").single();
     if (sportError || !sportTemplate) {
-      console.error(`❌ Template query error:`, sportError);
-      throw new Error(`Wati template not found for: ${sportName} / ${eventName} / ${eventType}. Please add it to the wati_templates table first.`);
+      throw new Error(`Sport template not found for: ${sportName} (use_case: community_booking). Please add it to the database first.`);
     }
-    console.log(`✅ Found template: ${sportTemplate.wati_template_name}`);
-    console.log(`📋 Variable mapping:`, sportTemplate.variable_attribute_mapping);
     // Get facility info
     const { data: facility, error: facilityError } = await supabase.from("facilities").select("*").eq("facility_name", facilityName).single();
     console.log(`🏢 Facility lookup for "${facilityName}":`, facility ? "Found" : "Not found");
@@ -376,66 +393,10 @@ serve(async (req)=>{
     const executionId = execution.id;
     console.log(`📝 Execution ID: ${executionId}`);
     // ========================================================================
-    // 5. BUILD WHATSAPP PARAMETERS DYNAMICALLY
-    // ========================================================================
-
-    // Build data context for parameter mapping
-    const dataContext = {
-      userName,
-      userPhone,
-      userEmail,
-      sportName,
-      facilityName,
-      formattedDateTime,
-      facilityMapLink,
-      facilityAddress,
-      courtName,
-      eventType,
-      eventName,
-    };
-
-    // Build parameters dynamically using template's variable mapping
-    const watiParameters = [];
-    const mapping = sportTemplate.variable_attribute_mapping || {};
-
-    console.log(`🗺️ Variable mapping:`, JSON.stringify(mapping, null, 2));
-
-    for (const [watiVarName, sourceField] of Object.entries(mapping)) {
-      let value;
-
-      // Check if it's a direct field from dataContext
-      if (dataContext[sourceField] !== undefined) {
-        value = String(dataContext[sourceField]);
-      }
-      // Check if it's an attribute field
-      else if (sourceField.startsWith('attribute_')) {
-        const attrData = sportTemplate[sourceField];
-        // If it's an array, join with commas
-        if (Array.isArray(attrData)) {
-          value = attrData.join(', ');
-        } else {
-          value = String(attrData || '');
-        }
-      }
-      // Fallback
-      else {
-        value = '';
-        console.warn(`⚠️ Source field "${sourceField}" not found in dataContext`);
-      }
-
-      watiParameters.push({
-        name: watiVarName,
-        value: value || 'N/A',
-      });
-    }
-
-    console.log(`📋 Built WhatsApp parameters:`, JSON.stringify(watiParameters, null, 2));
-
-    // ========================================================================
-    // 6. SEND WHATSAPP MESSAGE
+    // 5. SEND WHATSAPP MESSAGE
     // ========================================================================
     console.log("📱 Sending WhatsApp message...");
-    const whatsappResult = await sendWhatsAppMessage(userPhone, sportTemplate.wati_template_name, watiParameters, watiApiToken, watiBaseUrl);
+    const whatsappResult = await sendWhatsAppMessage(userPhone, sportTemplate.wati_template_name, userName, formattedDateTime, facilityName, sportName, facilityMapLink, watiApiToken, watiBaseUrl);
     await supabase.from("community_booking_confirmation_workflow_executions").update({
       whatsapp_sent: whatsappResult.success,
       whatsapp_response: whatsappResult.response || null,
