@@ -522,8 +522,8 @@ serve(async (req) => {
       .eq("name", facilityName)
       .single();
 
-    const facilityMapLink = facility?.map_link || "";
-    const facilityAddress = facility?.address || facilityName;
+    const facilityMapLink = facility?.google_maps_link || "";
+    const facilityAddress = facility?.google_location || facilityName;
 
     // Create execution log
     const { data: execution, error: execError } = await supabase
