@@ -5,8 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 // 👇 NEW: use AWS SDK (ESM build)
-import { SESClient, SendRawEmailCommand } from "https://esm.sh/@aws-sdk/client-ses@3.676.0";
-
+import { SESClient, SendRawEmailCommand } from "https://esm.sh/@aws-sdk/client-ses@3.926.0?target=deno&bundle";
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -241,32 +240,34 @@ async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, i
       ``,
       `--${boundary}--`
     ].join("\r\n");
-
     // SDK wants Uint8Array, not base64 string
     const rawEmailBytes = new TextEncoder().encode(rawEmail);
-
     const client = new SESClient({
       region: awsRegion,
       credentials: {
         accessKeyId: awsAccessKeyId,
         secretAccessKey: awsSecretAccessKey,
-      },
+        defaultsMode: "standard"
+      }
     });
-
     const command = new SendRawEmailCommand({
       RawMessage: {
-        Data: rawEmailBytes,
-      },
+        Data: rawEmailBytes
+      }
     });
-
     const resp = await client.send(command);
-
     console.log("✅ Email sent successfully via SES SDK", resp);
-    return { success: true, messageId: resp.MessageId };
+    return {
+      success: true,
+      messageId: resp.MessageId
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error("❌ Email failed:", errorMsg);
-    return { success: false, error: errorMsg };
+    return {
+      success: false,
+      error: errorMsg
+    };
   }
 }
 // ============================================================================
@@ -329,10 +330,10 @@ serve(async (req)=>{
     }
     // Normalize field names (support both formats)
     const userName = payload["User Name"] || payload.userName;
-    // const userPhone = payload["User Phone Number"] || payload.userPhoneNumber;
-    const userPhone = "919840738620";
-    // const userEmail = payload["User Email"] || payload.userEmail;
-    const userEmail = "nithya.n@gametheory.in";
+    const userPhone = payload["User Phone Number"] || payload.userPhoneNumber;
+    // const userPhone = "919840738620";
+    const userEmail = payload["User Email"] || payload.userEmail;
+    // const userEmail = "nithya.n@gametheory.in";
     const sportName = payload["Sport Name"] || payload.sportName;
     const eventType = payload["Event Type"] || payload.eventType;
     const slots = payload.Slots || payload.slots;
