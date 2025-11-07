@@ -431,8 +431,8 @@ serve(async (req) => {
     const awsRegion = Deno.env.get("AWS_REGION");
     const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
     const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-    const emailFromAddress = Deno.env.get("EMAIL_FROM_ADDRESS") || "bookings@gametheory.in";
-    const emailFromName = Deno.env.get("EMAIL_FROM_NAME") || "Game Theory Bookings";
+    const emailFromAddress = Deno.env.get("EMAIL_FROM_ADDRESS") || "noreply@gametheory.in";
+    const emailFromName = Deno.env.get("EMAIL_FROM_NAME") || "Game Theory";
 
     // Log configuration (without exposing sensitive data)
     console.log("🔧 Configuration loaded:");
