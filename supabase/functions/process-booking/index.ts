@@ -330,9 +330,9 @@ serve(async (req)=>{
     // Normalize field names (support both formats)
     const userName = payload["User Name"] || payload.userName;
     // const userPhone = payload["User Phone Number"] || payload.userPhoneNumber;
-    const userPhone = 919840738620;
+    const userPhone = "919840738620";
     // const userEmail = payload["User Email"] || payload.userEmail;
-    const userEmail = 'nithya.n@gametheory.in';
+    const userEmail = "nithya.n@gametheory.in";
     const sportName = payload["Sport Name"] || payload.sportName;
     const eventType = payload["Event Type"] || payload.eventType;
     const slots = payload.Slots || payload.slots;
