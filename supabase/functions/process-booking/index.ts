@@ -180,17 +180,22 @@ async function sendWhatsAppMessage(
     const formattedPhone = phoneNumber.startsWith("91") ? phoneNumber : `91${phoneNumber}`;
     const url = `${cleanBaseUrl}/api/v2/sendTemplateMessage?whatsappNumber=${formattedPhone}`;
 
+    // Build parameters array, ensuring no empty values (Wati may reject empty parameters)
+    const parameters = [
+      { name: "name", value: userName || "Guest" },
+      { name: "datetime", value: formattedDateTime || "TBD" },
+      { name: "facility_name", value: facilityName || "Game Theory" },
+      { name: "sport_name", value: sportName || "Sports" },
+      { name: "facility_map_link", value: facilityMapLink || "https://maps.google.com" },
+    ];
+
     const payload = {
       template_name: templateName,
       broadcast_name: templateName,
-      parameters: [
-        { name: "name", value: userName },
-        { name: "datetime", value: formattedDateTime },
-        { name: "facility_name", value: facilityName },
-        { name: "sport_name", value: sportName },
-        { name: "facility_map_link", value: facilityMapLink },
-      ],
+      parameters: parameters,
     };
+
+    console.log(`📋 WhatsApp Parameters:`, JSON.stringify(parameters, null, 2));
 
     console.log(`📤 Sending to Wati: ${url}`);
     console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
@@ -516,14 +521,26 @@ serve(async (req) => {
     }
 
     // Get facility info
-    const { data: facility } = await supabase
+    const { data: facility, error: facilityError } = await supabase
       .from("facilities")
       .select("*")
       .eq("name", facilityName)
       .single();
 
-    const facilityMapLink = facility?.google_maps_link || "";
+    console.log(`🏢 Facility lookup for "${facilityName}":`, facility ? "Found" : "Not found");
+    if (facilityError) {
+      console.log(`⚠️ Facility query error:`, facilityError);
+    }
+    if (facility) {
+      console.log(`  - Address: ${facility.google_location || "N/A"}`);
+      console.log(`  - Map Link: ${facility.google_maps_link || "EMPTY"}`);
+    }
+
+    // Use facility data or defaults (column names: google_maps_link, google_location)
+    const facilityMapLink = facility?.google_maps_link || "https://maps.google.com";
     const facilityAddress = facility?.google_location || facilityName;
+
+    console.log(`📍 Using Map Link: ${facilityMapLink}`);
 
     // Create execution log
     const { data: execution, error: execError } = await supabase
