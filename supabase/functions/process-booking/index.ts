@@ -188,6 +188,9 @@ async function sendWhatsAppMessage(
       ],
     };
 
+    console.log(`📤 Sending to Wati: ${url}`);
+    console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -197,10 +200,25 @@ async function sendWhatsAppMessage(
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
+    console.log(`📡 Wati response status: ${response.status}`);
+
+    // Get response text first to handle empty or non-JSON responses
+    const responseText = await response.text();
+    console.log(`📄 Wati response body: ${responseText}`);
+
+    // Try to parse as JSON if there's content
+    let data: any = null;
+    if (responseText && responseText.trim().length > 0) {
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("⚠️ Failed to parse Wati response as JSON:", parseError);
+        throw new Error(`Wati returned non-JSON response (${response.status}): ${responseText.substring(0, 200)}`);
+      }
+    }
 
     if (!response.ok) {
-      throw new Error(`Wati API error (${response.status}): ${JSON.stringify(data)}`);
+      throw new Error(`Wati API error (${response.status}): ${responseText.substring(0, 500)}`);
     }
 
     console.log("✅ WhatsApp sent successfully");
