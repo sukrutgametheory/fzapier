@@ -173,8 +173,12 @@ async function sendWhatsAppMessage(
   watiBaseUrl: string
 ): Promise<{ success: boolean; response?: any; error?: string }> {
   try {
+    // Clean up inputs (trim whitespace)
+    const cleanToken = watiApiToken.trim();
+    const cleanBaseUrl = watiBaseUrl.trim().replace(/\/$/, ""); // Remove trailing slash
+
     const formattedPhone = phoneNumber.startsWith("91") ? phoneNumber : `91${phoneNumber}`;
-    const url = `${watiBaseUrl}/api/v2/sendTemplateMessage?whatsappNumber=${formattedPhone}`;
+    const url = `${cleanBaseUrl}/api/v2/sendTemplateMessage?whatsappNumber=${formattedPhone}`;
 
     const payload = {
       template_name: templateName,
@@ -190,12 +194,13 @@ async function sendWhatsAppMessage(
 
     console.log(`📤 Sending to Wati: ${url}`);
     console.log(`📦 Payload:`, JSON.stringify(payload, null, 2));
+    console.log(`🔑 Token format: ${cleanToken.substring(0, 10)}...${cleanToken.substring(cleanToken.length - 4)} (length: ${cleanToken.length})`);
 
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${watiApiToken}`,
+        "Authorization": cleanToken, // Try without "Bearer" prefix first
       },
       body: JSON.stringify(payload),
     });
@@ -428,6 +433,13 @@ serve(async (req) => {
     const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
     const emailFromAddress = Deno.env.get("EMAIL_FROM_ADDRESS") || "bookings@gametheory.in";
     const emailFromName = Deno.env.get("EMAIL_FROM_NAME") || "Game Theory Bookings";
+
+    // Log configuration (without exposing sensitive data)
+    console.log("🔧 Configuration loaded:");
+    console.log(`  - Wati Base URL: ${watiBaseUrl}`);
+    console.log(`  - Wati Token length: ${watiApiToken?.length || 0} chars`);
+    console.log(`  - AWS Region: ${awsRegion}`);
+    console.log(`  - Email From: ${emailFromAddress}`);
 
     // Validate required env vars
     if (!watiApiToken || !watiBaseUrl) {
