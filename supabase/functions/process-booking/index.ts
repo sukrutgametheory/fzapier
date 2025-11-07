@@ -4,6 +4,9 @@
 // ============================================================================
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+// 👇 NEW: use AWS SDK (ESM build)
+import { SESClient, SendRawEmailCommand } from "https://esm.sh/@aws-sdk/client-ses@3.676.0";
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -193,7 +196,7 @@ async function sendWhatsAppMessage(phoneNumber, templateName, userName, formatte
   }
 }
 // ============================================================================
-// AWS SES (Email) FUNCTIONS
+// AWS SES (Email) FUNCTIONS - UPDATED TO USE AWS SDK
 // ============================================================================
 async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, icsContent, icsFilename, awsRegion, awsAccessKeyId, awsSecretAccessKey, fromEmail, fromName) {
   try {
@@ -238,93 +241,33 @@ async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, i
       ``,
       `--${boundary}--`
     ].join("\r\n");
-    const rawEmailBase64 = btoa(rawEmail);
-    const sesEndpoint = `https://email.${awsRegion}.amazonaws.com/`;
-    const requestBody = new URLSearchParams({
-      Action: "SendRawEmail",
-      "RawMessage.Data": rawEmailBase64
-    }).toString();
-    const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
-    const dateStamp = timestamp.substring(0, 8);
-    const signature = await createAWSSignature(awsAccessKeyId, awsSecretAccessKey, awsRegion, dateStamp, timestamp, requestBody);
-    const response = await fetch(sesEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-Amz-Date": timestamp,
-        "Authorization": signature
+
+    // SDK wants Uint8Array, not base64 string
+    const rawEmailBytes = new TextEncoder().encode(rawEmail);
+
+    const client = new SESClient({
+      region: awsRegion,
+      credentials: {
+        accessKeyId: awsAccessKeyId,
+        secretAccessKey: awsSecretAccessKey,
       },
-      body: requestBody
     });
-    const responseText = await response.text();
-    if (!response.ok) {
-      throw new Error(`AWS SES error (${response.status}): ${responseText}`);
-    }
-    const messageIdMatch = responseText.match(/<MessageId>(.*?)<\/MessageId>/);
-    const awsMessageId = messageIdMatch ? messageIdMatch[1] : undefined;
-    console.log("✅ Email sent successfully");
-    return {
-      success: true,
-      messageId: awsMessageId
-    };
+
+    const command = new SendRawEmailCommand({
+      RawMessage: {
+        Data: rawEmailBytes,
+      },
+    });
+
+    const resp = await client.send(command);
+
+    console.log("✅ Email sent successfully via SES SDK", resp);
+    return { success: true, messageId: resp.MessageId };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error("❌ Email failed:", errorMsg);
-    return {
-      success: false,
-      error: errorMsg
-    };
+    return { success: false, error: errorMsg };
   }
-}
-async function createAWSSignature(accessKeyId, secretAccessKey, region, dateStamp, timestamp, requestBody) {
-  const service = "ses";
-  const algorithm = "AWS4-HMAC-SHA256";
-  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const canonicalRequest = [
-    "POST",
-    "/",
-    "",
-    "content-type:application/x-www-form-urlencoded",
-    `host:email.${region}.amazonaws.com`,
-    `x-amz-date:${timestamp}`,
-    "",
-    "content-type;host;x-amz-date",
-    await sha256(requestBody)
-  ].join("\n");
-  const stringToSign = [
-    algorithm,
-    timestamp,
-    credentialScope,
-    await sha256(canonicalRequest)
-  ].join("\n");
-  const kDate = await hmacSha256(`AWS4${secretAccessKey}`, dateStamp);
-  const kRegion = await hmacSha256(kDate, region);
-  const kService = await hmacSha256(kRegion, service);
-  const kSigning = await hmacSha256(kService, "aws4_request");
-  const signature = await hmacSha256(kSigning, stringToSign);
-  return `${algorithm} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=content-type;host;x-amz-date, Signature=${bytesToHex(signature)}`;
-}
-async function sha256(message) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return bytesToHex(new Uint8Array(hashBuffer));
-}
-async function hmacSha256(key, message) {
-  const encoder = new TextEncoder();
-  const keyData = typeof key === "string" ? encoder.encode(key) : key;
-  const messageData = encoder.encode(message);
-  const cryptoKey = await crypto.subtle.importKey("raw", keyData, {
-    name: "HMAC",
-    hash: "SHA-256"
-  }, false, [
-    "sign"
-  ]);
-  const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
-  return new Uint8Array(signature);
-}
-function bytesToHex(bytes) {
-  return Array.from(bytes).map((b)=>b.toString(16).padStart(2, "0")).join("");
 }
 // ============================================================================
 // MAIN EDGE FUNCTION
