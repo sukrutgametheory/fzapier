@@ -176,12 +176,25 @@ async function sendWhatsAppMessage(phoneNumber, templateName, parameters, watiAp
 // ============================================================================
 async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, icsContent, icsFilename, awsRegion, awsAccessKeyId, awsSecretAccessKey, fromEmail, fromName) {
   try {
+    // Helper function to base64 encode UTF-8 strings properly
+    const utf8ToBase64 = (str) => {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const base64 = btoa(String.fromCharCode(...data));
+      return base64;
+    };
+
     // Build MIME email with ICS attachment
     const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const messageId = `<${Date.now()}.${Math.random().toString(36).substring(7)}@gametheory.in>`;
     const date = new Date().toUTCString();
-    const icsBase64 = btoa(icsContent);
+
+    // Base64 encode all bodies to handle UTF-8 (emojis, special chars)
+    const textBodyBase64 = utf8ToBase64(textBody);
     const htmlBody = textBody.replace(/\n/g, "<br>");
+    const htmlBodyBase64 = utf8ToBase64(htmlBody);
+    const icsBase64 = utf8ToBase64(icsContent);
+
     const rawEmail = [
       `From: ${fromName} <${fromEmail}>`,
       `To: ${toName} <${toEmail}>`,
@@ -196,15 +209,15 @@ async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, i
       ``,
       `--${boundary}-alt`,
       `Content-Type: text/plain; charset="UTF-8"`,
-      `Content-Transfer-Encoding: 7bit`,
+      `Content-Transfer-Encoding: base64`,
       ``,
-      textBody,
+      textBodyBase64,
       ``,
       `--${boundary}-alt`,
       `Content-Type: text/html; charset="UTF-8"`,
-      `Content-Transfer-Encoding: 7bit`,
+      `Content-Transfer-Encoding: base64`,
       ``,
-      htmlBody,
+      htmlBodyBase64,
       ``,
       `--${boundary}-alt--`,
       ``,
