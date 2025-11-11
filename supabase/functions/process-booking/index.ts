@@ -326,10 +326,25 @@ serve(async (req)=>{
     // ========================================================================
     // 3. FORMAT DATE/TIME
     // ========================================================================
-    const formattedDateTime = formatDateTime(eventDate, startTime);
-    const startDateTime = combineDateTime(eventDate, startTime);
-    const endDateTime = addHours(startDateTime, 1);
-    console.log(`📅 ${formattedDateTime}`);
+    // For WhatsApp: use raw startTime from payload (e.g., "9AM - 10AM")
+    // For Calendar: try to parse if it's in HH:MM format, otherwise use eventDate
+    let startDateTime, endDateTime;
+    try {
+      // Try to parse if startTime is in "HH:MM" format
+      if (startTime && startTime.includes(":")) {
+        startDateTime = combineDateTime(eventDate, startTime);
+        endDateTime = addHours(startDateTime, 1);
+      } else {
+        // If startTime is in "9AM - 10AM" format, just use the date
+        startDateTime = new Date(eventDate).toISOString();
+        endDateTime = addHours(startDateTime, 1);
+      }
+    } catch (e) {
+      // Fallback to using date only
+      startDateTime = new Date(eventDate).toISOString();
+      endDateTime = addHours(startDateTime, 1);
+    }
+    console.log(`📅 Time: ${startTime}`);
     // ========================================================================
     // 4. GET DATA FROM DATABASE
     // ========================================================================
@@ -386,7 +401,8 @@ serve(async (req)=>{
       userEmail,
       sportName,
       facilityName,
-      formattedDateTime,
+      startTime,  // Use raw startTime from payload (e.g., "9AM - 10AM")
+      eventDate,  // Raw event date
       facilityMapLink,
       facilityAddress,
       courtName,
@@ -447,32 +463,25 @@ serve(async (req)=>{
     console.log("📧 Sending email with calendar invite...");
     // Build calendar description
     let calendarDescription = sportTemplate.calendar_description_template || "";
-    calendarDescription = calendarDescription.replace(/\{\{userName\}\}/g, userName).replace(/\{\{facilityName\}\}/g, facilityName).replace(/\{\{datetime\}\}/g, formattedDateTime);
-    // attribute_2: we_will_provide
-    if (sportTemplate.attribute_2?.length > 0) {
-      calendarDescription += "\n\nWe'll provide:";
-      sportTemplate.attribute_2.forEach((item)=>{
-        calendarDescription += `\n🎯 ${item}`;
-      });
-    }
+    calendarDescription = calendarDescription.replace(/\{\{userName\}\}/g, userName).replace(/\{\{facilityName\}\}/g, facilityName).replace(/\{\{startTime\}\}/g, startTime);
+
+    // Attributes are now TEXT, not arrays
     // attribute_1: please_bring
-    if (sportTemplate.attribute_1?.length > 0) {
-      calendarDescription += "\n\nPlease bring:";
-      sportTemplate.attribute_1.forEach((item)=>{
-        calendarDescription += `\n👉 ${item}`;
-      });
+    if (sportTemplate.attribute_1 && sportTemplate.attribute_1.trim().length > 0) {
+      calendarDescription += "\n\nPlease bring:\n👉 " + sportTemplate.attribute_1;
+    }
+    // attribute_2: we_will_provide
+    if (sportTemplate.attribute_2 && sportTemplate.attribute_2.trim().length > 0) {
+      calendarDescription += "\n\nWe'll provide:\n🎯 " + sportTemplate.attribute_2;
     }
     // attribute_3: tips
-    if (sportTemplate.attribute_3?.length > 0) {
-      calendarDescription += "\n\nTips:";
-      sportTemplate.attribute_3.forEach((item)=>{
-        calendarDescription += `\n💡 ${item}`;
-      });
+    if (sportTemplate.attribute_3 && sportTemplate.attribute_3.trim().length > 0) {
+      calendarDescription += "\n\nTips:\n💡 " + sportTemplate.attribute_3;
     }
     // Generate ICS file
     const icsContent = generateICS(`${sportName} - Community Game`, calendarDescription, facilityAddress, startDateTime, endDateTime, emailFromAddress, emailFromName, userEmail, userName);
     // Send email
-    const emailSubject = `Calendar Invite: ${sportName} on ${formattedDateTime}`;
+    const emailSubject = `Calendar Invite: ${sportName} at ${startTime}`;
     const emailBody = `Hi ${userName},\n\nYour ${sportName} booking is confirmed!\n\n${calendarDescription}\n\nPlease find the calendar invite attached. Click on it to add to your calendar.\n\nSee you there!\nTeam Game Theory`;
     const emailResult = await sendEmailWithCalendarInvite(userEmail, userName, emailSubject, emailBody, icsContent, `booking-${sportName.toLowerCase()}.ics`, awsRegion, awsAccessKeyId, awsSecretAccessKey, emailFromAddress, emailFromName);
     await supabase.from("community_booking_confirmation_workflow_executions").update({
