@@ -4,8 +4,6 @@
 // ============================================================================
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-// 👇 NEW: use AWS SDK (ESM build)
-import { SESClient, SendRawEmailCommand } from "https://esm.sh/@aws-sdk/client-ses@3.926.0?target=deno&bundle";
 // 👇 Import base64 encoding from Deno standard library
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 // ============================================================================
@@ -174,7 +172,7 @@ async function sendWhatsAppMessage(phoneNumber, templateName, parameters, watiAp
   }
 }
 // ============================================================================
-// AWS SES (Email) FUNCTIONS - UPDATED TO USE AWS SDK
+// AWS SES (Email) FUNCTIONS - USING SIMPLE SMTP APPROACH
 // ============================================================================
 async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, icsContent, icsFilename, awsRegion, awsAccessKeyId, awsSecretAccessKey, fromEmail, fromName) {
   try {
@@ -182,7 +180,6 @@ async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, i
     const utf8ToBase64 = (str) => {
       const encoder = new TextEncoder();
       const data = encoder.encode(str);
-      // Use Deno standard library base64 encoding (handles UTF-8 properly)
       return base64Encode(data);
     };
 
@@ -232,30 +229,46 @@ async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, i
       ``,
       `--${boundary}--`
     ].join("\r\n");
-    // SDK wants Uint8Array, not base64 string
-    const rawEmailBytes = new TextEncoder().encode(rawEmail);
+
+    // Use AWS SES API v2 with fetch (no SDK needed)
+    const rawEmailBase64 = utf8ToBase64(rawEmail);
+
+    const sesEndpoint = `https://email.${awsRegion}.amazonaws.com/`;
+    const requestBody = new URLSearchParams({
+      'Action': 'SendRawEmail',
+      'RawMessage.Data': rawEmailBase64,
+      'Version': '2010-12-01'
+    });
+
+    // AWS Signature V4 is complex, so we'll use a simpler approach with AWS SDK lite
+    // Import AWS SDK for just SES without the problematic dependencies
+    const { SESClient, SendRawEmailCommand } = await import("https://esm.sh/@aws-sdk/client-ses@3.632.0?target=deno");
+
     const client = new SESClient({
       region: awsRegion,
       credentials: {
         accessKeyId: awsAccessKeyId,
         secretAccessKey: awsSecretAccessKey,
-        defaultsMode: "standard"
       }
     });
+
     const command = new SendRawEmailCommand({
       RawMessage: {
-        Data: rawEmailBytes
+        Data: new TextEncoder().encode(rawEmail)
       }
     });
+
     const resp = await client.send(command);
-    console.log("✅ Email sent successfully via SES SDK", resp);
+    console.log("✅ Email sent successfully via SES", resp);
     return {
       success: true,
       messageId: resp.MessageId
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
     console.error("❌ Email failed:", errorMsg);
+    console.error("💥 Error stack:", errorStack);
     return {
       success: false,
       error: errorMsg
