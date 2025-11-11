@@ -329,34 +329,49 @@ serve(async (req)=>{
     // ========================================================================
     // 3. FORMAT DATE/TIME
     // ========================================================================
-    // For WhatsApp: use raw startTime from payload (e.g., "9AM - 10AM")
-    // For Calendar: parse eventDate properly, set default time to 9AM
+    // For WhatsApp: use raw data from payload as-is
+    // For Calendar: try to create valid ISO dates, fallback to defaults if parsing fails
     let startDateTime, endDateTime;
+    let eventDateISO;
 
     try {
-      // Validate and parse eventDate
+      // Try to parse eventDate for calendar and database
       const dateObj = new Date(eventDate);
-      if (isNaN(dateObj.getTime())) {
-        throw new Error(`Invalid eventDate format: ${eventDate}`);
-      }
+      if (!isNaN(dateObj.getTime())) {
+        // Valid date, use it
+        eventDateISO = dateObj.toISOString();
 
-      // Try to parse if startTime is in "HH:MM" format (e.g., "19:00")
-      if (startTime && startTime.includes(":") && !startTime.includes("AM") && !startTime.includes("PM")) {
-        startDateTime = combineDateTime(eventDate, startTime);
-        endDateTime = addHours(startDateTime, 1);
+        // Try to parse if startTime is in "HH:MM" format (e.g., "19:00")
+        if (startTime && startTime.includes(":") && !startTime.includes("AM") && !startTime.includes("PM") && !startTime.includes("-")) {
+          startDateTime = combineDateTime(eventDate, startTime);
+          endDateTime = addHours(startDateTime, 1);
+        } else {
+          // If startTime is in "9AM - 10AM" format or any other format, use date with 9AM as default
+          const date = new Date(eventDate);
+          date.setHours(9, 0, 0, 0); // Default to 9:00 AM
+          startDateTime = date.toISOString();
+          endDateTime = addHours(startDateTime, 1);
+        }
       } else {
-        // If startTime is in "9AM - 10AM" format, use date with 9AM as default
-        const date = new Date(eventDate);
-        date.setHours(9, 0, 0, 0); // Default to 9:00 AM
-        startDateTime = date.toISOString();
+        // Invalid date, use current date as fallback
+        console.warn(`⚠️ Could not parse eventDate: ${eventDate}, using current date`);
+        const now = new Date();
+        eventDateISO = now.toISOString();
+        now.setHours(9, 0, 0, 0);
+        startDateTime = now.toISOString();
         endDateTime = addHours(startDateTime, 1);
       }
 
-      console.log(`📅 Parsed startDateTime: ${startDateTime}, endDateTime: ${endDateTime}`);
+      console.log(`📅 Using eventDateISO: ${eventDateISO}, startDateTime: ${startDateTime}`);
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error(`❌ Date parsing error: ${errorMsg}`);
-      throw new Error(`Failed to parse date/time: ${errorMsg}`);
+      // Ultimate fallback - use current date/time
+      console.error(`❌ Date parsing error:`, e);
+      const now = new Date();
+      eventDateISO = now.toISOString();
+      now.setHours(9, 0, 0, 0);
+      startDateTime = now.toISOString();
+      endDateTime = addHours(startDateTime, 1);
+      console.log(`⚠️ Using fallback datetime: ${startDateTime}`);
     }
     // ========================================================================
     // 4. GET DATA FROM DATABASE
@@ -396,7 +411,7 @@ serve(async (req)=>{
       sport_name: sportName,
       event_type: eventType,
       facility_name: facilityName,
-      event_date: new Date(eventDate).toISOString()
+      event_date: eventDateISO
     }).select("id").single();
     if (execError) {
       throw new Error(`Failed to create execution log: ${execError.message}`);
