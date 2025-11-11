@@ -6,6 +6,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 // 👇 NEW: use AWS SDK (ESM build)
 import { SESClient, SendRawEmailCommand } from "https://esm.sh/@aws-sdk/client-ses@3.926.0?target=deno&bundle";
+// 👇 Import base64 encoding from Deno standard library
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -176,12 +178,12 @@ async function sendWhatsAppMessage(phoneNumber, templateName, parameters, watiAp
 // ============================================================================
 async function sendEmailWithCalendarInvite(toEmail, toName, subject, textBody, icsContent, icsFilename, awsRegion, awsAccessKeyId, awsSecretAccessKey, fromEmail, fromName) {
   try {
-    // Helper function to base64 encode UTF-8 strings properly
+    // Helper function to base64 encode UTF-8 strings properly for Deno
     const utf8ToBase64 = (str) => {
       const encoder = new TextEncoder();
       const data = encoder.encode(str);
-      const base64 = btoa(String.fromCharCode(...data));
-      return base64;
+      // Use Deno standard library base64 encoding (handles UTF-8 properly)
+      return base64Encode(data);
     };
 
     // Build MIME email with ICS attachment
