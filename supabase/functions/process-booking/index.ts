@@ -323,28 +323,41 @@ serve(async (req)=>{
     const courtName = slot.courtName;
     const eventDate = slot.eventDate;
     const startTime = slot.startTime;
+
+    console.log(`📅 Raw eventDate: ${eventDate}, Raw startTime: ${startTime}`);
+
     // ========================================================================
     // 3. FORMAT DATE/TIME
     // ========================================================================
     // For WhatsApp: use raw startTime from payload (e.g., "9AM - 10AM")
-    // For Calendar: try to parse if it's in HH:MM format, otherwise use eventDate
+    // For Calendar: parse eventDate properly, set default time to 9AM
     let startDateTime, endDateTime;
+
     try {
-      // Try to parse if startTime is in "HH:MM" format
-      if (startTime && startTime.includes(":")) {
+      // Validate and parse eventDate
+      const dateObj = new Date(eventDate);
+      if (isNaN(dateObj.getTime())) {
+        throw new Error(`Invalid eventDate format: ${eventDate}`);
+      }
+
+      // Try to parse if startTime is in "HH:MM" format (e.g., "19:00")
+      if (startTime && startTime.includes(":") && !startTime.includes("AM") && !startTime.includes("PM")) {
         startDateTime = combineDateTime(eventDate, startTime);
         endDateTime = addHours(startDateTime, 1);
       } else {
-        // If startTime is in "9AM - 10AM" format, just use the date
-        startDateTime = new Date(eventDate).toISOString();
+        // If startTime is in "9AM - 10AM" format, use date with 9AM as default
+        const date = new Date(eventDate);
+        date.setHours(9, 0, 0, 0); // Default to 9:00 AM
+        startDateTime = date.toISOString();
         endDateTime = addHours(startDateTime, 1);
       }
+
+      console.log(`📅 Parsed startDateTime: ${startDateTime}, endDateTime: ${endDateTime}`);
     } catch (e) {
-      // Fallback to using date only
-      startDateTime = new Date(eventDate).toISOString();
-      endDateTime = addHours(startDateTime, 1);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error(`❌ Date parsing error: ${errorMsg}`);
+      throw new Error(`Failed to parse date/time: ${errorMsg}`);
     }
-    console.log(`📅 Time: ${startTime}`);
     // ========================================================================
     // 4. GET DATA FROM DATABASE
     // ========================================================================
